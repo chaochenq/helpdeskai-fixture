@@ -1,22 +1,34 @@
 [tool.poetry]
-name = "fixture-agentic-cicd-demo"
-version = "0.1.0"
-description = "Trent validation fixture: agentic system with CI/CD coding agent automation"
-authors = ["Trent Security <security@trent.ai>"]
+name = "helpdeskai"
+version = "0.3.1"
+description = "HelpDeskAI — multi-tenant AI customer-support SaaS (Trent security validation fixture; DELIBERATELY VULNERABLE)"
+authors = ["HelpDeskAI Engineering <eng@helpdeskai.example>"]
 readme = "README.md"
+packages = [{ include = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
+# Agent runtime
 langchain-anthropic = "^0.3"
 langchain-core = "^0.3"
 langgraph = "^0.2"
-mcp = "^1.0"
-fastmcp = "^2.0"
+mcp = "^1.0"   # provides mcp.server.fastmcp.FastMCP (used by src/mcp_server)
+# Web service
+fastapi = "^0.115"
+uvicorn = { extras = ["standard"], version = "^0.32" }
+pydantic = "^2.9"
+pyjwt = "^2.9"
+python-multipart = "^0.0.12"
+# AWS data layer
+boto3 = "^1.35"
+psycopg = { extras = ["binary", "pool"], version = "^3.2" }
+# Misc
 requests = "^2.32"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
 pytest-asyncio = "^0.24"
+httpx = "^0.27"          # FastAPI TestClient
 
 [build-system]
 requires = ["poetry-core"]
@@ -25,3 +37,4 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]

@@ -46,15 +46,46 @@ def _load_system_prompt() -> str:
         return "You are a helpful AI assistant with access to tools."
 
 
-def create_orchestrator(model_name: str = "claude-3-5-sonnet-20241022") -> StateGraph:
-    """Build and return the orchestrator LangGraph."""
+class Orchestrator:
+    """Thin runtime wrapper around the compiled orchestrator graph.
+
+    Exposes an ``invoke(message, tenant_id, thread_id)`` surface so callers (the
+    FastAPI chat route) don't have to construct the LangGraph state dict themselves.
+    """
+
+    def __init__(self, compiled_graph) -> None:
+        self._graph = compiled_graph
+
+    def invoke(self, message: str, tenant_id: str, thread_id: str) -> str:
+        """Run the orchestrator for one customer message and return the reply text."""
+        from langchain_core.messages import HumanMessage
+
+        state: OrchestratorState = {
+            "messages": [HumanMessage(content=message)],
+            "context": {"tenant_id": tenant_id, "thread_id": thread_id},
+        }
+        result = self._graph.invoke(state)
+        last = result["messages"][-1]
+        return last.content if hasattr(last, "content") else str(last)
+
+
+def create_orchestrator(model_name: str = "claude-3-5-sonnet-20241022") -> "Orchestrator":
+    """Build the orchestrator LangGraph and return a runnable Orchestrator wrapper."""
     llm = ChatAnthropic(model=model_name)
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
     system_prompt = _load_system_prompt()
 
     def call_model(state: OrchestratorState) -> dict:
-        messages = [SystemMessage(content=system_prompt)] + state["messages"]
+        # Thread the (header-derived, hence spoofable — see VULN-MT-002) tenant_id
+        # into the system prompt so the model passes it to the domain tools.
+        tenant_id = state.get("context", {}).get("tenant_id", "unknown")
+        scoped_prompt = (
+            f"{system_prompt}\n\n"
+            f"Current tenant_id: {tenant_id}. Pass this tenant_id to any tool "
+            f"that requires it."
+        )
+        messages = [SystemMessage(content=scoped_prompt)] + state["messages"]
         response = llm_with_tools.invoke(messages)
         return {"messages": [response]}
 
@@ -84,4 +115,4 @@ def create_orchestrator(model_name: str = "claude-3-5-sonnet-20241022") -> State
     graph.add_edge("tools", "agent")
     graph.add_edge("sub_agent", "agent")
 
-    return graph.compile()
+    return Orchestrator(graph.compile())

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class ChatRequest(BaseModel):

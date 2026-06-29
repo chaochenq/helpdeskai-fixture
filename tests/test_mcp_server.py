@@ -14,14 +14,14 @@ import tempfile
 def test_execute_code_basic():
     """Verify execute_code runs Python and captures the result variable."""
     from src.mcp_server.server import execute_code
-    output = execute_code.fn(code="result = 1 + 1")
+    output = execute_code(code="result = 1 + 1")
     assert output == "2"
 
 
 def test_execute_code_error_returns_message():
     """Verify execute_code returns error messages rather than raising."""
     from src.mcp_server.server import execute_code
-    output = execute_code.fn(code="raise ValueError('test error')")
+    output = execute_code(code="raise ValueError('test error')")
     assert "Error" in output
     assert "test error" in output
 
@@ -35,7 +35,7 @@ def test_execute_code_no_sandbox():
     from src.mcp_server.server import execute_code
     # Set a dummy env var and verify execute_code can read it.
     os.environ["FIXTURE_TEST_SECRET"] = "plaintext-value"
-    output = execute_code.fn(code="import os; result = os.environ.get('FIXTURE_TEST_SECRET')")
+    output = execute_code(code="import os; result = os.environ.get('FIXTURE_TEST_SECRET')")
     assert output == "plaintext-value"
     del os.environ["FIXTURE_TEST_SECRET"]
 
@@ -58,7 +58,7 @@ def test_query_database_basic():
     original_connect = sqlite3.connect
     import unittest.mock as mock
     with mock.patch("sqlite3.connect", return_value=sqlite3.connect(db_path)):
-        rows = query_database.fn(table="users", filter_column="name", filter_value="Alice")
+        rows = query_database(table="users", filter_column="name", filter_value="Alice")
     assert len(rows) == 1
     assert rows[0]["name"] == "Alice"
 

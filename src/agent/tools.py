@@ -133,9 +133,26 @@ def create_ticket(subject: str, body: str, customer_email: str, tenant_id: str) 
     return DynamoDBClient().create_ticket(tenant_id, subject, body, customer_email)
 
 
-# Tool registry — the orchestrator binds the ops tools plus the domain tools.
-# The generic ops tools (read_file/run_shell/fetch_url) are internal/debug tools that
-# should NOT be exposed to a customer-facing agent — their presence is itself a finding.
+@tool
+def delegate_to_sub_agent(task: str) -> str:
+    """Delegate a focused, self-contained sub-task to the task-executor sub-agent.
+
+    Use this for multi-step research or escalation work that should run as its own
+    ReAct loop (e.g. "investigate why order X keeps failing and summarize").
+
+    Args:
+        task: A self-contained description of the sub-task to execute.
+    """
+    # Routing signal: the orchestrator graph routes to the `sub_agent` node when it
+    # sees this tool call and runs the sub-agent with `task`. The return value here is
+    # a placeholder — the sub-agent node produces the real result and answers this call.
+    return "delegated"
+
+
+# Tool registry — the orchestrator binds the ops tools, the domain tools, and the
+# sub-agent delegation tool. The generic ops tools (read_file/run_shell/fetch_url) are
+# internal/debug tools that should NOT be exposed to a customer-facing agent — their
+# presence is itself a finding.
 ALL_TOOLS = [
     read_file,
     run_shell,
@@ -144,6 +161,7 @@ ALL_TOOLS = [
     issue_refund,
     search_kb,
     create_ticket,
+    delegate_to_sub_agent,
 ]
 
 # Subset exposed to the sub-agent — intentionally excludes run_shell and the

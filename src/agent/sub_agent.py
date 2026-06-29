@@ -70,13 +70,35 @@ def create_sub_agent_node(tools: list[BaseTool]):
     compiled = graph.compile()
 
     def run_sub_agent(state: dict) -> dict:
-        """Node function: runs the sub-agent and returns the result to the parent."""
-        task = state.get("context", {}).get("sub_agent_task", "")
-        from langchain_core.messages import HumanMessage
+        """Node function: runs the sub-agent and returns the result to the parent.
+
+        Reads the task from the orchestrator's `delegate_to_sub_agent` tool call,
+        runs the sub-agent ReAct loop, and emits a ToolMessage answering that call
+        (required so the orchestrator's next model turn has a valid message history).
+        """
+        from langchain_core.messages import HumanMessage, ToolMessage
+
+        last = state["messages"][-1]
+        task = ""
+        tool_call_id = None
+        for call in getattr(last, "tool_calls", []) or []:
+            if call["name"] == "delegate_to_sub_agent":
+                task = call["args"].get("task", "")
+                tool_call_id = call["id"]
+                break
+        if not task:
+            task = state.get("context", {}).get("sub_agent_task", "")
+
         result = compiled.invoke({"messages": [HumanMessage(content=task)], "result": ""})
-        last_message = result["messages"][-1]
-        return {
-            "context": {**state.get("context", {}), "sub_agent_result": last_message.content}
+        result_text = result["messages"][-1].content
+
+        out: dict = {
+            "context": {**state.get("context", {}), "sub_agent_result": result_text},
         }
+        if tool_call_id is not None:
+            out["messages"] = [
+                ToolMessage(content=str(result_text), tool_call_id=tool_call_id)
+            ]
+        return out
 
     return run_sub_agent
