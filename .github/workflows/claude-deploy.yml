@@ -1,0 +1,61 @@
+# SECURITY FIXTURE — DELIBERATELY VULNERABLE WORKFLOW
+# This file is a test fixture for Trent's agentic deployment automation posture
+# analysis. It contains deliberately planted vulnerabilities. Do NOT use this
+# as a template for real workflows.
+#
+# PLANTED FINDINGS:
+#   VULN-CI-006: agent-gated production deploy with no human approval gate
+#                (no environment: protection rule, no required-reviewers)
+#   VULN-CI-006 (sub): Claude Code reads DEPLOY_NOTES.md from the pushed commit —
+#                       attacker with merge access controls deployment parameters
+
+name: Claude Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    # No 'environment:' declaration here — which is the mechanism GitHub provides
+    # for required reviewers and deployment protection rules. Without it, this job
+    # runs immediately on any push to main with no human gate.
+    #
+    # VULN-CI-006: A push to main — which any collaborator or a compromised token
+    # can perform — triggers a Claude Code agent that executes a production deploy
+    # script. An attacker with write access to main can craft DEPLOY_NOTES.md to
+    # inject instructions into the Claude prompt.
+
+    permissions:
+      contents: read
+      id-token: write  # For OIDC-based cloud auth during deploy
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Run Claude Code deploy agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # VULN-CI-006: The prompt instructs Claude to read DEPLOY_NOTES.md from
+          # the commit and use it to configure the deployment. An attacker who merges
+          # a PR can write arbitrary deployment instructions into DEPLOY_NOTES.md.
+          # Claude Code then executes those instructions (including deploy.sh) with
+          # AWS credentials active in the environment.
+          prompt: |
+            Read DEPLOY_NOTES.md in the repository root for deployment instructions,
+            then run: bash deploy.sh --env production
+
+            After the deploy completes, summarize what was deployed and report any
+            errors encountered.
+          claude_args: "--max-turns 15 --allowedTools bash,read"

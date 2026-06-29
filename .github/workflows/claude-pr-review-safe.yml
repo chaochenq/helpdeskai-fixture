@@ -1,0 +1,55 @@
+# SECURITY FIXTURE — POSITIVE CONTROL WORKFLOW
+# This file demonstrates the CORRECT pattern for running Claude Code on pull requests.
+# It should be detected by Trent as a positive control, contrasting with the
+# vulnerable claude-review.yml.
+#
+# POSITIVE CONTROLS:
+#   CTRL-CI-001: pull_request trigger (not pull_request_target) — fork PRs run with
+#                read-only token, no access to base-repo secrets
+#   CTRL-CI-002: anthropics/claude-code-action pinned to a commit SHA (not @v1 tag)
+#   CTRL-CI-003: minimal permissions — only contents: read and pull-requests: write
+
+name: Claude Code PR Review (Safe)
+
+on:
+  pull_request:
+    # CTRL-CI-001: 'pull_request' trigger — fork PRs get a read-only GITHUB_TOKEN
+    # scoped to the PR, with no access to base-repo secrets. This is the correct
+    # trigger for running agents on untrusted PR content. Contrast with
+    # pull_request_target in claude-review.yml which runs with base-repo privileges.
+    types: [opened, synchronize, reopened]
+
+jobs:
+  claude-pr-review:
+    runs-on: ubuntu-latest
+
+    # CTRL-CI-003: Least-privilege permissions — the Claude Code action only needs
+    # to read the code and write a review comment. No contents: write (can't modify
+    # files), no id-token: write (can't request cloud credentials).
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        # Pinning actions/checkout to a commit SHA as a supply-chain best practice.
+        # This is especially important when subsequent steps have elevated permissions.
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          # For 'pull_request' trigger, the default checkout is the PR merge commit
+          # (a synthetic merge of head into base). This is correct — we want to
+          # review the merged result, not the raw fork head.
+          fetch-depth: 1
+
+      - name: Run Claude Code review
+        # CTRL-CI-002: Action pinned to a full commit SHA, not a floating tag.
+        # The comment documents the version for human readers while the SHA
+        # prevents silent tag replacement.
+        uses: anthropics/claude-code-action@ad3c35f9e03e073624b484e68eb8ba9183cef1b8  # v1.0.2
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          trigger_phrase: "@claude"
+          # Restrict Claude Code to read-only tools — it cannot write files or
+          # execute shell commands. This limits blast radius if the agent is
+          # manipulated into attempting harmful actions.
+          claude_args: "--max-turns 5 --allowedTools read,list_files"

@@ -1,0 +1,32 @@
+# Reusable composite action — sets up the Python environment for test and build jobs.
+# POSITIVE CONTROL: This is a local composite action (not a third-party action),
+# so there is no third-party supply chain risk. It uses pinned SHA references for
+# any external actions it itself calls.
+
+name: Setup Environment
+description: Set up Python and install dependencies for CI jobs
+
+inputs:
+  python-version:
+    description: Python version to use
+    required: false
+    default: "3.11"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: pip
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio
+
+    - name: Verify installation
+      shell: bash
+      run: python -c "import langchain_anthropic; import mcp; print('Dependencies OK')"

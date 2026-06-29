@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "fixture-mcp": {
+      "command": "python",
+      "args": ["-m", "src.mcp_server.server"],
+      "env": {}
+    }
+  }
+}

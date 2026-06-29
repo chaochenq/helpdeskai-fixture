@@ -1,0 +1,27 @@
+[tool.poetry]
+name = "fixture-agentic-cicd-demo"
+version = "0.1.0"
+description = "Trent validation fixture: agentic system with CI/CD coding agent automation"
+authors = ["Trent Security <security@trent.ai>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+langchain-anthropic = "^0.3"
+langchain-core = "^0.3"
+langgraph = "^0.2"
+mcp = "^1.0"
+fastmcp = "^2.0"
+requests = "^2.32"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+pytest-asyncio = "^0.24"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
