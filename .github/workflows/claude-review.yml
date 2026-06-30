@@ -4,17 +4,19 @@
 # as a template for real workflows.
 #
 # PLANTED FINDINGS:
-#   VULN-CI-001: pull_request_target + checkout of PR head + agent execution
+#   VULN-CI-001: REMEDIATED (MT-PA-013) — switched to `pull_request` + safe
+#                default merge-commit checkout (was pull_request_target + PR head).
 #   VULN-CI-007: contents: write permission allows agent to modify workflow files
 #   VULN-CI-005 (partial): anthropics/claude-code-action@v1 is a floating tag
 
 name: Claude Code PR Review
 
 on:
-  # VULN-CI-001: pull_request_target runs in the base repo context, with base-repo
-  # secrets and GITHUB_TOKEN. When combined with a checkout of the PR head below,
-  # attacker-controlled code from the fork executes with elevated privileges.
-  pull_request_target:
+  # MT-PA-013 (remediated VULN-CI-001): use `pull_request`, not
+  # `pull_request_target`. `pull_request` runs in the fork's context WITHOUT
+  # base-repo secrets or a writable GITHUB_TOKEN, so attacker-controlled fork
+  # code can no longer execute with the base repo's privileges.
+  pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
@@ -32,10 +34,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # VULN-CI-001 (continued): Checking out the PR head ref of a fork PR means
-          # the agent reads and executes attacker-controlled files (e.g., skill files
-          # in .claude/skills/ that Claude Code loads at startup).
-          ref: ${{ github.event.pull_request.head.sha }}
+          # MT-PA-013 (remediated VULN-CI-001): no explicit `ref:` — the default
+          # `pull_request` checkout is the safe merge commit, not the raw fork
+          # head. Combined with the `pull_request` trigger above, the agent no
+          # longer reads/executes attacker-controlled fork content with base
+          # privileges.
           fetch-depth: 0
 
       - name: Run Claude Code review
