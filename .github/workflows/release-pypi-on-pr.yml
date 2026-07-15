@@ -1,0 +1,87 @@
+# SECURITY FIXTURE — DELIBERATELY VULNERABLE WORKFLOW (AsyncAPI-class supply chain)
+# Faithful reproduction of the July 2025 AsyncAPI GitHub Actions compromise
+# (wiz.io/blog/m-red-team-asyncapi-supply-chain-compromise-via-github-actions):
+# a CLASSIC, NON-AGENTIC build/publish workflow that runs untrusted PR code with
+# base-repo secrets in scope, exposes a long-lived org-wide PAT (the credential-theft
+# primitive the attacker exfiltrated), and publishes to a package registry from the
+# same job (poisoned pipeline execution).
+#
+# There is deliberately NO AI coding agent here. This fixture probes whether Trent's
+# CI/CD / deployment-automation posture surface catches conventional supply-chain
+# compromise, not only coding-agent misuse. Do NOT use this as a template.
+#
+# PLANTED FINDINGS:
+#   VULN-CI-016 (Critical): pull_request_target + checkout of the untrusted PR head sha
+#                           runs fork-controlled code (build backend / conftest.py /
+#                           test code) with base-repo secrets in scope — the exact
+#                           trigger+checkout composition AsyncAPI was compromised through.
+#   VULN-CI-017 (Critical): a long-lived, org-wide RELEASE_PAT (plus PYPI_API_TOKEN) is
+#                           placed in the environment of the job that executes untrusted
+#                           code — the credential-theft primitive the attacker exfiltrated.
+#   VULN-CI-018 (High):     poisoned pipeline execution — the same job that runs untrusted
+#                           code also publishes to PyPI, so a compromised build step (or
+#                           the exfiltrated token) reaches downstream consumers.
+#   VULN-CI-019 (Medium):   secret-bearing job uses floating action tags (@v4/@v5), not
+#                           SHA-pinned references — a tag-swap supply-chain vector.
+
+name: Build and Publish (PR validation)
+
+on:
+  # VULN-CI-016: pull_request_target runs in the BASE repository context, with base-repo
+  # secrets and a read/write GITHUB_TOKEN — even for PRs from forks. This is the exact
+  # trigger the AsyncAPI compromise abused.
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+# Broad write scope on a job that will execute untrusted fork code.
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+
+    env:
+      # VULN-CI-017: long-lived, org-wide credentials present in the environment of a job
+      # that executes untrusted fork code. In AsyncAPI the stolen credential was an
+      # org-scoped bot PAT; exfiltrating it enabled direct pushes to a release branch and
+      # ultimately five poisoned package versions.
+      RELEASE_PAT: ${{ secrets.ORG_RELEASE_PAT }}
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+    steps:
+      - name: Checkout PR head (UNTRUSTED)
+        # VULN-CI-016 (continued): checks out the fork's head sha. Combined with
+        # pull_request_target above, every subsequent `run:` step executes
+        # attacker-controlled repository content with the secrets above readable from
+        # the environment.
+        uses: actions/checkout@v4  # VULN-CI-019: floating tag, not SHA-pinned
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5  # VULN-CI-019: floating tag, not SHA-pinned
+        with:
+          python-version: "3.11"
+
+      - name: Install and build (executes PR-controlled code)
+        # The fork controls pyproject.toml / the build backend / conftest.py / the test
+        # suite. `pip install -e .` invokes the fork's build backend; `pytest` imports and
+        # runs the fork's conftest and test code. Either executes arbitrary attacker code
+        # with RELEASE_PAT and PYPI_API_TOKEN readable from the environment — the AsyncAPI
+        # code-execution + credential-scan step, no AI agent required.
+        run: |
+          pip install -e .
+          pip install pytest build twine
+          pytest -q || true
+          python -m build
+
+      - name: Publish to PyPI on release label
+        # VULN-CI-018: poisoned pipeline execution. The same job that ran untrusted code
+        # publishes the built artifact. A compromised build step can substitute the
+        # artifact, or the exfiltrated token can be used to publish out of band.
+        if: contains(github.event.pull_request.labels.*.name, 'release')
+        run: |
+          twine upload --username __token__ --password "$PYPI_API_TOKEN" dist/*
