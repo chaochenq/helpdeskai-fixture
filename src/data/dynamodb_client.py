@@ -69,6 +69,20 @@ class DynamoDBClient:
         )
         return item
 
+    def escalate_ticket(self, tenant_id: str, ticket_id: str, tier: str) -> dict[str, Any]:
+        """Escalate a ticket to a higher support tier, tenant-scoped by PK."""
+        self._table.update_item(
+            Key={"tenant_id": tenant_id, "ticket_id": ticket_id},
+            UpdateExpression="SET escalation_tier = :t, #s = :s",
+            ExpressionAttributeNames={"#s": "status"},
+            ExpressionAttributeValues={":t": tier, ":s": "escalated"},
+        )
+        logger.info(
+            "Ticket escalated",
+            extra={"tenant_id": tenant_id, "ticket_id": ticket_id, "tier": tier},
+        )
+        return {"tenant_id": tenant_id, "ticket_id": ticket_id, "escalation_tier": tier}
+
     # ── Vulnerability: Scan + FilterExpression instead of Query ───────────────
 
     def scan_tickets_for_tenant(

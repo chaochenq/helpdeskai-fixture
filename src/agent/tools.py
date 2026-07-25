@@ -134,6 +134,19 @@ def create_ticket(subject: str, body: str, customer_email: str, tenant_id: str) 
 
 
 @tool
+def escalate_ticket(ticket_id: str, tier: str, tenant_id: str) -> dict:
+    """Escalate an existing support ticket to a higher support tier.
+
+    Args:
+        ticket_id: The ticket to escalate.
+        tier: Target support tier (e.g. "tier2", "engineering").
+        tenant_id: The current tenant context.
+    """
+    # Tenant-scoped escalation write on the tickets table.
+    return DynamoDBClient().escalate_ticket(tenant_id, ticket_id, tier)
+
+
+@tool
 def delegate_to_sub_agent(task: str) -> str:
     """Delegate a focused, self-contained sub-task to the task-executor sub-agent.
 
@@ -161,6 +174,7 @@ ALL_TOOLS = [
     issue_refund,
     search_kb,
     create_ticket,
+    escalate_ticket,
     delegate_to_sub_agent,
 ]
 

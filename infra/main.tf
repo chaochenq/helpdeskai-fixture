@@ -7,7 +7,7 @@
 #   VULN-DATA-003 (High):     KB bucket is public-read and has no server-side encryption
 #   VULN-CLOUD-001 (Critical): IAM policy grants s3:* and dynamodb:* on Resource "*"
 #   VULN-CLOUD-002 (High):     hardcoded AWS access key / secret in the provider block
-#   VULN-CLOUD-003 (Medium):   RDS instance with storage_encrypted = false (no KMS)
+#   VULN-CLOUD-003 (Medium):   REMEDIATED — orders RDS now SSE-KMS encrypted + private
 # POSITIVE CONTROLS:
 #   CTRL-CLOUD-001: attachments bucket enforces SSE-KMS + full public-access block
 
@@ -114,18 +114,32 @@ resource "aws_dynamodb_table" "tickets" {
   }
 }
 
-# SECURITY FIXTURE: VULN-CLOUD-003 — RDS instance holding customer orders + PII with
-# storage_encrypted = false: no encryption at rest, no KMS. PII (see VULN-DATA-002)
-# sits unencrypted on disk and in snapshots.
+# REMEDIATED (was VULN-CLOUD-003): the orders RDS instance now enforces encryption
+# at rest with a customer-managed KMS key and is no longer publicly reachable. The
+# DB password is sourced from a variable (injected from Secrets Manager) rather than
+# hardcoded.
+resource "aws_kms_key" "orders" {
+  description             = "CMK for HelpDeskAI orders RDS at-rest encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+}
+
+variable "orders_db_password" {
+  description = "Orders RDS master password, injected from Secrets Manager at apply time."
+  type        = string
+  sensitive   = true
+}
+
 resource "aws_db_instance" "orders" {
-  identifier        = "helpdeskai-orders"
-  engine            = "postgres"
-  instance_class    = "db.t3.medium"
-  allocated_storage = 50
-  username          = "helpdeskAI_app"
-  password          = "changeme" # also weak/committed, compounds VULN-CLOUD-002
-  storage_encrypted = false      # VULN-CLOUD-003
-  publicly_accessible = true     # VULN-CLOUD-003: DB reachable from the internet
+  identifier          = "helpdeskai-orders"
+  engine              = "postgres"
+  instance_class      = "db.t3.medium"
+  allocated_storage   = 50
+  username            = "helpdeskAI_app"
+  password            = var.orders_db_password
+  storage_encrypted   = true
+  kms_key_id          = aws_kms_key.orders.arn
+  publicly_accessible = false
   skip_final_snapshot = true
 }
 

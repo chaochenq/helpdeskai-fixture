@@ -24,6 +24,7 @@ boto3 = "^1.35"
 psycopg = { extras = ["binary", "pool"], version = "^3.2" }
 # Misc
 requests = "^2.32"
+redis = "^5.0"   # session + rate-limit cache for the support API
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
