@@ -39,25 +39,30 @@ resource "aws_s3_bucket" "kb_docs" {
   bucket = "helpdeskai-kb-docs"
 }
 
-# SECURITY FIXTURE: VULN-DATA-003 — public-read ACL on the KB bucket. Any anonymous
-# internet user can list and download every tenant's knowledge-base documents.
+# KB bucket ACL — hardened to private (VULN-DATA-003 remediated).
 resource "aws_s3_bucket_acl" "kb_docs" {
   bucket = aws_s3_bucket.kb_docs.id
-  acl    = "public-read" # VULN-DATA-003
+  acl    = "private" # VULN-DATA-003 remediated
 }
 
-# SECURITY FIXTURE: VULN-DATA-003 — public access block explicitly DISABLED, so the
-# public-read ACL above takes effect (no account/bucket guard rail).
+# Full public-access block on the KB bucket (VULN-DATA-003 remediated).
 resource "aws_s3_bucket_public_access_block" "kb_docs" {
   bucket                  = aws_s3_bucket.kb_docs.id
-  block_public_acls       = false # VULN-DATA-003
-  block_public_policy     = false # VULN-DATA-003
-  ignore_public_acls      = false # VULN-DATA-003
-  restrict_public_buckets = false # VULN-DATA-003
+  block_public_acls       = true # VULN-DATA-003 remediated
+  block_public_policy     = true # VULN-DATA-003 remediated
+  ignore_public_acls      = true # VULN-DATA-003 remediated
+  restrict_public_buckets = true # VULN-DATA-003 remediated
 }
 
-# NOTE the ABSENCE of an aws_s3_bucket_server_side_encryption_configuration for
-# kb_docs — VULN-DATA-003: KB documents are stored unencrypted at rest.
+# SSE-S3 encryption at rest for the KB bucket (VULN-DATA-003 remediated).
+resource "aws_s3_bucket_server_side_encryption_configuration" "kb_docs" {
+  bucket = aws_s3_bucket.kb_docs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Attachments bucket — SECURE (CTRL-CLOUD-001)
