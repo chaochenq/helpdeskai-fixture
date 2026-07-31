@@ -114,9 +114,14 @@ resource "aws_dynamodb_table" "tickets" {
   }
 }
 
-# SECURITY FIXTURE: VULN-CLOUD-003 — RDS instance holding customer orders + PII with
-# storage_encrypted = false: no encryption at rest, no KMS. PII (see VULN-DATA-002)
-# sits unencrypted on disk and in snapshots.
+# Customer-managed KMS key for RDS encryption at rest (VULN-CLOUD-003 remediation).
+resource "aws_kms_key" "orders" {
+  description         = "CMK for RDS orders encryption at rest"
+  enable_key_rotation = true
+}
+
+# RDS instance holding customer orders + PII — hardened: encrypted at rest with a
+# customer-managed KMS key and no longer publicly accessible (VULN-CLOUD-003 remediated).
 resource "aws_db_instance" "orders" {
   identifier        = "helpdeskai-orders"
   engine            = "postgres"
@@ -124,8 +129,9 @@ resource "aws_db_instance" "orders" {
   allocated_storage = 50
   username          = "helpdeskAI_app"
   password          = "changeme" # also weak/committed, compounds VULN-CLOUD-002
-  storage_encrypted = false      # VULN-CLOUD-003
-  publicly_accessible = true     # VULN-CLOUD-003: DB reachable from the internet
+  storage_encrypted   = true                   # VULN-CLOUD-003 remediated
+  kms_key_id          = aws_kms_key.orders.arn # VULN-CLOUD-003 remediated
+  publicly_accessible = false                  # VULN-CLOUD-003 remediated
   skip_final_snapshot = true
 }
 
