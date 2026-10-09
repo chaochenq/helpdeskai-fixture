@@ -16,10 +16,10 @@ def test_tool_read_file_exists():
     assert callable(read_file)
 
 
-def test_tool_export_customers_exists():
-    """Verify the export tool is importable and callable."""
-    from src.agent.tools import export_customers
-    assert callable(export_customers)
+def test_tool_export_customers_removed():
+    """The shell-interpolated export tool is gone."""
+    from src.agent import tools
+    assert not hasattr(tools, "export_customers")
 
 
 def test_tool_fetch_url_exists():
@@ -33,7 +33,8 @@ def test_all_tools_in_registry():
     from src.agent.tools import ALL_TOOLS
     tool_names = {t.name for t in ALL_TOOLS}
     # ops tools
-    assert {"read_file", "fetch_url", "export_customers"}.issubset(tool_names)
+    assert {"read_file", "fetch_url"}.issubset(tool_names)
+    assert "export_customers" not in tool_names
     # HelpDeskAI domain tools (operate on tenant data)
     assert {"lookup_order", "issue_refund", "search_kb", "create_ticket"}.issubset(tool_names)
     # multi-agent delegation tool (routes to the sub-agent node)
@@ -46,6 +47,7 @@ def test_sub_agent_tools_subset_of_all():
     all_names = {t.name for t in ALL_TOOLS}
     sub_names = {t.name for t in SUB_AGENT_TOOLS}
     assert sub_names.issubset(all_names)
+    assert "export_customers" not in all_names
     assert "export_customers" not in sub_names
 
 

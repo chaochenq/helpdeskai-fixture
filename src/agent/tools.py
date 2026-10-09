@@ -5,7 +5,6 @@ SECURITY FIXTURE — This file contains deliberately insecure tool implementatio
 for use as a Trent scan validation fixture. Do NOT use this code in production.
 
 Planted findings (application tier):
-  VULN-APP-001: run_shell — RCE via shell=True with user-supplied command string
   VULN-APP-002: fetch_url — SSRF via user-supplied URL with no allowlist or redirect cap
   VULN-APP-003: read_file — path traversal via user-supplied path with no sandbox
 
@@ -15,7 +14,6 @@ what makes the agent able to reach tenant data, and what makes CHAIN-1 (chat
 prompt-injection -> un-tenant-scoped lookup -> cross-tenant PII) concrete.
 """
 
-import subprocess
 import urllib.request
 from langchain_core.tools import tool
 
@@ -130,33 +128,11 @@ def delegate_to_sub_agent(task: str) -> str:
 
 
 # Tool registry — the orchestrator binds the ops tools, the domain tools, and the
-# sub-agent delegation tool. The generic ops tools (read_file/run_shell/fetch_url) are
-# internal/debug tools that should NOT be exposed to a customer-facing agent — their
-# presence is itself a finding.
-@tool
-def export_customers(where_clause: str) -> str:
-    """Export customer rows matching a raw SQL predicate.
-
-    Args:
-        where_clause: SQL fragment appended after WHERE.
-    """
-    # Deliberate new vulnerability for the ticketing incremental: the predicate
-    # is concatenated into a shell command, so a caller can inject both SQL and
-    # a second command.
-    result = subprocess.run(
-        f'sqlite3 data.db "SELECT email, card_last4 FROM customers WHERE {where_clause}"',
-        shell=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    return result.stdout + result.stderr
-
-
+# sub-agent delegation tool. export_customers was removed: it interpolated a
+# caller-supplied predicate into a shell command.
 ALL_TOOLS = [
     read_file,
     fetch_url,
-    export_customers,
     lookup_order,
     issue_refund,
     search_kb,
